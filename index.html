@@ -1,0 +1,2352 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DUPR 比賽分數輸入（多場地）</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+
+    /* Team color theming for A/B columns */
+    .teamA { background-color: #e8f1ff !important; border-color: #b6d4fe !important; }
+    .teamB { background-color: #ffe8e8 !important; border-color: #f1b0b7 !important; }
+    .teamA:disabled, .teamB:disabled { opacity: 0.95; }
+    td.teamA-cell { background: linear-gradient(to right, rgba(13,110,253,0.06), transparent); }
+    td.teamB-cell { background: linear-gradient(to left, rgba(220,53,69,0.06), transparent); }
+
+    .locked-row { opacity: 0.75; }
+
+    /* 專注檢視用大字體 */
+    .focus-title { font-size: 1.75rem; font-weight: 700; }
+    .focus-section { margin-top: 1rem; }
+    .focus-label { font-size: 1.2rem; font-weight: 600; }
+    .focus-select { font-size: 1.15rem; padding: .6rem .75rem; }
+    .focus-score { width: 120px; font-size: 2rem; text-align: center; }
+    .focus-team-label { font-size: 1.25rem; font-weight: 700; }
+
+    body { padding: 2rem; }
+    .table td, .table th { vertical-align: middle; }
+    .score-input { width: 60px; text-align: center; }
+    .btn-space { margin-right: 10px; margin-bottom: 5px; }
+    #courtTabsContainer { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+
+<!-- 語音設定（雲端女聲） -->
+<div id="cloudVoiceSettings" class="card mt-2" style="max-width:860px;margin:12px auto;border:1px solid #e5e7eb;border-radius:12px;">
+  <div class="card-body" style="padding:12px 16px;">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="font-weight:700;">語音設定（雲端女聲）</div>
+      <label class="form-check-inline">
+        <input class="form-check-input" type="checkbox" id="useCloudTTSChk_main">
+        啟用雲端女聲（失敗時自動改用本機）
+      </label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label class="form-label mb-0">聲音</label>
+        <select id="cloudVoiceSelect" class="form-select form-select-sm" style="min-width:220px;">
+          <option value="zh-TW-HsiaoChenNeural">HsiaoChen（繁中女）</option>
+          <option value="zh-TW-HsiaoYuNeural">HsiaoYu（繁中女）</option>
+          <option value="zh-TW-YunJheNeural">YunJhe（繁中男）</option>
+          <option value="zh-CN-XiaoxiaoNeural">Xiaoxiao（中文女）</option>
+          <option value="en-US-JennyNeural">Jenny（英文女）</option>
+          <option value="en-US-AriaNeural">Aria（英文女）</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label class="form-label mb-0">語速</label>
+        <button id="rateMinusBtn" class="btn btn-sm btn-outline-secondary" type="button">-5%</button>
+        <input id="cloudRateInput" class="form-control form-control-sm" style="width:90px" value="0%">
+        <button id="ratePlusBtn" class="btn btn-sm btn-outline-secondary" type="button">+5%</button>>
+      
+<div style="font-size:12px;color:#6b7280;margin-top:4px;">
+  語速說明：<code>0%</code>=正常、<code>-10%</code>=慢一點、<code>+10%</code>=快一點；也可輸入 <code>0.95</code> 表示 95%（會自動轉成 <code>-5%</code>）。
+</div>
+
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <label class="form-label mb-0">音高</label>
+        <input id="cloudPitchInput" class="form-control form-control-sm" style="width:90px" value="+6%">
+      </div>
+      <button id="cloudSaveBtn" class="btn btn-sm btn-outline-secondary" type="button">保存</button>
+    </div>
+  </div>
+
+<!-- TTS 狀態顯示 -->
+  <div style="display:flex;gap:8px;align-items:center;">
+    <label class="form-label mb-0">伺服器</label>
+    <input id="cloudServerInput" class="form-control form-control-sm" style="min-width:260px" placeholder="http://localhost:8787/api/tts">
+    <button id="cloudPingBtn" class="btn btn-sm btn-outline-primary" type="button">Cloud 測試</button>
+    <label class="form-check-inline" title="偵錯用：只用雲端，失敗就不播，避免自動退回本機造成誤判">
+      <input class="form-check-input" type="checkbox" id="cloudOnlyChk">
+      雲端僅用（失敗不播）
+    </label>
+  </div>
+  <div id="cloudDiag" style="margin-top:6px;font-size:12px;color:#444;background:#f9fafb;border:1px solid #eee;border-radius:8px;padding:8px;display:none;"></div>
+
+<div id="ttsStatusBar" style="max-width:860px;margin:0 auto;padding:4px 0 0 0;">
+  <span id="ttsStatusBadge" style="display:inline-block;padding:4px 10px;border-radius:999px;background:#e5e7eb;color:#111;font-size:12px;font-weight:600;">TTS: 準備中…</span>
+</div>
+
+</div>
+
+  <div class="container">
+    <!-- 場地切換按鈕 -->
+    <div id="courtTabsContainer" class="text-center"></div>
+<div class="text-center mb-2">
+  <button class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#ttsSettingsModal">🔊 語音設定</button>
+</div>
+
+    <h2 class="text-center text-primary">Organizer: Rott</h2>
+
+    <div class="text-center mb-3">
+      <button class="btn btn-light btn-space" onclick="window.open('input_player_data_v9_4_1_editable_batchfix.html', '_blank')">選手資料<br>(Players)</button>
+      <button class="btn btn-dark btn-space">比賽分數<br>(Matches)</button>
+    </div>
+
+    <table class="table table-bordered">
+      <thead class="table-light">
+        <tr class="${m.locked?'locked-row':''}">
+          <th></th>
+          <th>#</th>
+          <th>A1</th><th>A2</th><th>B1</th><th>B2</th>
+          <th>S/D</th>
+          <th>A Score</th><th>B Score</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="matchTableBody"></tbody>
+    </table>
+
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label for="locationInput" class="form-label">比賽地點</label>
+        <div class="input-group">
+          <select id="locationInput" class="form-select" data-default="New Taipei Pickleball Association NTCPA新北市匹克球協會積穗DUPR"></select>
+          <button class="btn btn-outline-secondary" type="button" onclick="addLocation()">增加地點</button>
+          <button class="btn btn-outline-dark" type="button" data-bs-toggle="modal" data-bs-target="#locationsManagerModal">地點管理</button>
+          <button class="btn btn-outline-primary" type="button" id="loginBtn" onclick="signInWithGoogle()">登入 Google</button>
+          <button class="btn btn-outline-secondary d-none" type="button" id="logoutBtn" onclick="signOutFirebase()">登出</button>
+          <button class="btn btn-outline-info" type="button" id="cfgBtn" onclick="promptFirebaseConfig()">Firebase 設定</button>
+        </div>
+      
+        <div class="form-text" id="authStatus">未登入：目前僅保存在此裝置</div>
+      </div>
+      <div class="col-md-4">
+        <label for="dateInput" class="form-label">比賽日期</label>
+        <input type="date" id="dateInput" class="form-control" >
+      </div>
+      <div class="col-md-4">
+        <label for="unlockPassword" class="form-label">🔑 解鎖密碼</label>
+        <div class="input-group">
+  <input type="password" id="unlockPassword" class="form-control w-auto">
+  <button class="btn btn-outline-danger" type="button" onclick="deleteAllMatches()" title="一次刪除目前場地所有場次資料">一鍵刪除</button>
+</div>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <button class="btn btn-success btn-space" onclick="addMatch()">＋ 添加比賽<br>(Add Match)</button>
+      <input type="file" id="importCSVInput" accept=".csv" style="display: none" onchange="importCSV(event)">
+      <button class="btn btn-info btn-space" onclick="document.getElementById('importCSVInput').click()">⬆ 匯入比賽資料</button>
+      <button class="btn btn-warning btn-space" onclick="exportCSV()">⬇ 匯出 CSV</button>
+      <button class="btn btn-outline-warning btn-space" onclick="exportDUPRCSV()">⬇ 匯出DUPR上傳用CSV</button>
+    
+    <!-- 全域附加播報資訊（主畫面可直接編輯；有內容就會在結尾語之前播報） -->
+    <div class="row mb-3">
+      <div class="col-12">
+        <label for="ttsExtraTextGlobal" class="form-label">比賽規則附加資訊</label>
+        <input id="ttsExtraTextGlobal" type="text" class="form-control" placeholder="例如：比賽採 11 分制，No deuce，發球得分制。">
+
+<!-- 附加資訊範本管理 -->
+<div class="row g-2 align-items-center mt-1">
+  <div class="col-12 col-md-6">
+    <select id="ttsExtraTemplateSelect" class="form-select form-select-sm" aria-label="附加資訊範本清單"></select>
+  </div>
+  <div class="col-12 col-md-6 d-flex gap-2">
+    <button class="btn btn-sm btn-outline-secondary" id="extraTplApplyBtn" title="將選取範本套用到輸入框">套用</button>
+    <button class="btn btn-sm btn-outline-primary" id="extraTplSaveBtn" title="把目前輸入內容儲存為新範本">儲存</button>
+    <button class="btn btn-sm btn-outline-success" id="extraTplUpdateBtn" title="以目前輸入覆蓋所選範本">更新</button>
+    <button class="btn btn-sm btn-outline-danger" id="extraTplDeleteBtn" title="刪除所選範本">刪除</button>
+  </div>
+</div>
+
+      </div>
+    </div>
+</div>
+
+    <div class="alert alert-warning text-center">
+      洛特穿線工作室 👉 <a href="https://www.facebook.com/RottStringingStudio/" target="_blank">點我了解</a>
+    </div>
+  </div>
+
+  <script>
+    const COURT_COUNT = 4;
+    let currentCourt = 1;
+    let matchData = [];
+    const validHashes = [
+      "2cec8cf0e321c284fa0c2ebef804aac18bf1cbb85546f89e7e3d0b6aa8b9d2cf",
+      "f457528f5880e850a162d62a3db51dda0f8c339434dd424b9781570aab5d4abb"
+    ];
+
+    function loadMatchData() {
+      const raw = localStorage.getItem('dupr_matches_court_' + currentCourt);
+      try { matchData = JSON.parse(raw) || []; } catch { matchData = []; }
+    }
+
+    function saveMatchData() {
+      localStorage.setItem('dupr_matches_court_' + currentCourt, JSON.stringify(matchData));
+    }
+
+    function getPlayers() {
+      const raw = localStorage.getItem('players');
+      try { return JSON.parse(raw) || []; } catch { return []; }
+    }
+
+    function initCourtTabs() {
+      const container = document.getElementById('courtTabsContainer');
+      container.innerHTML = '';
+      for (let i = 1; i <= COURT_COUNT; i++) {
+        const name = localStorage.getItem('courtName_' + i) || (i + '號場地');
+        const btn = document.createElement('button');
+        btn.id = 'courtTab' + i;
+        btn.className = 'btn btn-outline-secondary btn-space';
+        btn.textContent = name;
+        btn.addEventListener('click', () => switchCourt(i));
+        btn.addEventListener('dblclick', () => renameCourt(i));
+        container.appendChild(btn);
+      }
+    }
+
+    function renameCourt(i) {
+      const old = localStorage.getItem('courtName_' + i) || (i + '號場地');
+      const name = prompt('請輸入新的場地名稱：', old);
+      if (name) {
+        localStorage.setItem('courtName_' + i, name);
+        document.getElementById('courtTab' + i).textContent = name;
+      }
+    }
+
+    function switchCourt(i) {
+      currentCourt = i;
+      initTabStyles();
+      loadMatchData();
+      renderTable();
+    }
+
+    function initTabStyles() {
+      for (let i = 1; i <= COURT_COUNT; i++) {
+        const btn = document.getElementById('courtTab' + i);
+        btn.classList.toggle('btn-primary', i === currentCourt);
+        btn.classList.toggle('btn-outline-secondary', i !== currentCourt);
+      }
+    }
+
+    function createPlayerOptions(selected = '') {
+      const list = getPlayers();
+      let opts = '<option value="">--</option>';
+      list.forEach(p => {
+        opts += `<option value="${p.name}" ${p.name === selected ? 'selected' : ''}>${p.name}</option>`;
+      });
+      return opts;
+    }
+
+    // 依場次列動態過濾（避免 A1/A2/B1/B2 重複）
+    function createPlayerOptionsFiltered(idx, field, selected = '') {
+      const list = getPlayers();
+      const m = matchData[idx] || {};
+      const used = new Set();
+      if (field !== 'A1' && m.A1) used.add(m.A1);
+      if (field !== 'A2' && m.A2) used.add(m.A2);
+      if (field !== 'B1' && m.B1) used.add(m.B1);
+      if (field !== 'B2' && m.B2) used.add(m.B2);
+      let opts = '<option value="">--</option>';
+      list.forEach(p => {
+        const name = p.name;
+        if (name === selected) {
+          opts += `<option value="${name}" selected>${name}</option>`;
+        } else if (!used.has(name)) {
+          opts += `<option value="${name}">${name}</option>`;
+        }
+      });
+      return opts;
+    }
+
+    // 保證同一場次 4 個欄位不重複；如重複則自動清空後者
+    function enforceUniqueInRow(idx) {
+      const m = matchData[idx] || {};
+      const fields = ['A1','A2','B1','B2'];
+      const seen = new Set();
+      fields.forEach(f => {
+        const v = (m[f] || '').trim();
+        if (!v) return;
+        if (seen.has(v)) {
+          m[f] = '';
+        } else {
+          seen.add(v);
+        }
+      });
+    }
+
+    function renderTable() {
+      saveMatchData();
+      const tbody = document.getElementById('matchTableBody');
+      tbody.innerHTML = '';
+      matchData.forEach((m, idx) => {
+        tbody.innerHTML += `
+          <tr class="${m.locked?'locked-row':''}">
+            <td class="text-center">${m.locked ? "" : `<button class="btn btn-outline-primary btn-sm" title="專注檢視" onclick="focusMatch(${idx})">🔍</button>`}</td>
+            <td><button class="btn btn-link p-0 text-decoration-none" title="語音播報此場次" onclick="announceMatch(${idx})">${idx+1}</button></td>
+            <td class="teamA-cell"><select id="A1_${idx}" class="form-select teamA" ${m.locked?'disabled':''} onchange="updateField(${idx}, 'A1', this.value)">${createPlayerOptionsFiltered(idx, 'A1', m.A1)}</select></td>
+            <td class="teamA-cell"><select id="A2_${idx}" class="form-select teamA" ${m.locked?'disabled':''} onchange="updateField(${idx}, 'A2', this.value)">${createPlayerOptionsFiltered(idx, 'A2', m.A2)}</select></td>
+            <td class="teamB-cell"><select id="B1_${idx}" class="form-select teamB" ${m.locked?'disabled':''} onchange="updateField(${idx}, 'B1', this.value)">${createPlayerOptionsFiltered(idx, 'B1', m.B1)}</select></td>
+            <td class="teamB-cell"><select id="B2_${idx}" class="form-select teamB" ${m.locked?'disabled':''} onchange="updateField(${idx}, 'B2', this.value)">${createPlayerOptionsFiltered(idx, 'B2', m.B2)}</select></td>
+            <td><select id="SD_${idx}" class="form-select" ${m.locked?'disabled':''} onchange="updateSD(${idx}, this.value)">
+              <option value="S" ${m.SD==='S'?'selected':''}>S</option>
+              <option value="D" ${m.SD==='D'?'selected':''}>D</option>
+            </select></td>
+            <td><input type="number" class="form-control score-input" ${m.locked?'disabled':''} value="${m.AScore||''}" onchange="updateField(${idx}, 'AScore', this.value)"></td>
+            <td><input type="number" class="form-control score-input" ${m.locked?'disabled':''} value="${m.BScore||''}" onchange="updateField(${idx}, 'BScore', this.value)"></td>
+            <td class="text-center">
+              <button class="btn btn-${m.locked? 'success':'outline-success'} btn-sm me-1" onclick="toggleLock(${idx})">${m.locked?'🔒':'🔓'}</button>
+              <button class="btn btn-danger btn-sm" onclick="confirmDelete(${idx})">🗑️</button>
+            </td>
+          </tr>`;
+      });
+      // 依照 S/D 狀態啟用/停用 A2, B2
+      matchData.forEach((m, idx) => applySDRules(idx, m.SD));
+    }
+
+    function updateField(idx, field, value) {
+      matchData[idx][field] = value;
+      enforceUniqueInRow(idx);
+      saveMatchData();
+      renderTable();
+    }
+
+    function updateSD(idx, value) {
+      matchData[idx].SD = value;
+      if (value === 'S') {
+        matchData[idx].A2 = '';
+        matchData[idx].B2 = '';
+      }
+      saveMatchData();
+      applySDRules(idx, value);
+    }
+
+    function applySDRules(idx, sd) {
+      const a2 = document.getElementById(`A2_${idx}`);
+      const b2 = document.getElementById(`B2_${idx}`);
+      if (!a2 || !b2) return;
+      // 如該場已鎖定，整行都不可編輯
+      if (matchData[idx] && matchData[idx].locked) {
+        a2.disabled = true;
+        b2.disabled = true;
+        return;
+      }
+      if (sd === 'S') {
+        a2.disabled = true; a2.value = '';
+        b2.disabled = true; b2.value = '';
+      } else {
+        a2.disabled = false;
+        b2.disabled = false;
+      }
+    }
+
+    function addMatch() {
+      matchData.push({A1:'',A2:'',B1:'',B2:'',SD:'D',AScore:'',BScore:'',locked:false});
+      renderTable();
+    }
+
+    function importCSV(e) {
+      const file = e.target.files[0]; if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const lines = ev.target.result.split('\n').filter(l=>l.trim());
+        matchData = lines.map(l=>{
+          const c = l.replace(/"/g,'').split(',');
+          return { A1:c[6]||'', A2:c[9]||'', B1:c[12]||'', B2:c[15]||'', SD:c[3]||'D', AScore:c[19]||'', BScore:c[20]||'', locked:false };
+        });
+        renderTable();
+      };
+      reader.readAsText(file,'utf-8');
+    }
+
+    
+function downloadCSV(filename, csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const canShareFiles = navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: 'text/csv' })] });
+
+  function fallbackDownload() {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari && isIOS) {
+      // 提示長按儲存
+      showTemporaryMessage(`
+        <div class="alert alert-info">
+          無法自動下載？請長按下面連結選「儲存到檔案」或用分享功能：<br/>
+          <a href="${url}" download="${filename}">點此下載 ${filename}</a>
+        </div>
+      `, 10000);
+    } else {
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 1000 * 10);
+  }
+
+  if (isIOS && canShareFiles) {
+    const file = new File([blob], filename, { type: 'text/csv' });
+    navigator.share({
+      files: [file],
+      title: filename,
+      text: '這是你的 CSV 匯出檔案',
+    }).catch((err) => {
+      console.warn('分享失敗，退回到下載／顯示 fallback：', err);
+      fallbackDownload();
+    });
+  } else {
+    fallbackDownload();
+  }
+}
+
+function showTemporaryMessage(htmlContent, duration=5000) {
+  const wrapper=document.createElement('div');
+  wrapper.innerHTML=htmlContent;
+  wrapper.style.position='fixed';
+  wrapper.style.top='10px';
+  wrapper.style.left='50%';
+  wrapper.style.transform='translateX(-50%)';
+  wrapper.style.zIndex=9999;
+  document.body.appendChild(wrapper);
+  setTimeout(()=>{ document.body.removeChild(wrapper); }, duration);
+}
+
+function exportCSV() {
+      const players = getPlayers();
+      const getId = n=>{ const f=players.find(p=>p.name===n); return f?f.duprId:''; };
+      const loc = document.getElementById('locationInput').value;
+      const dt  = document.getElementById('dateInput').value;
+      let csv="";
+      matchData.forEach(r=>{
+        csv += [
+          '', '', '', r.SD||'D', loc, dt,
+          r.A1, getId(r.A1),'', r.A2,getId(r.A2),'', r.B1,getId(r.B1),'', r.B2,getId(r.B2),'', '', r.AScore||'', r.BScore||''
+        ].map(f=>`"${f}"`).join(',')+"\n";
+      });
+      const headered = "\uFEFF" + csv; // BOM for Excel
+      downloadCSV('dupr_scores.csv', headered);
+}
+
+function exportDUPRCSV() {
+      const players = getPlayers();
+      const getId = n=>{ const f=players.find(p=>p.name===n); return f?f.duprId:''; };
+      const loc = document.getElementById('locationInput').value;
+      const dt  = document.getElementById('dateInput').value;
+      let csv="";
+      matchData.forEach(r=>{
+        csv += [
+          '', '', '', r.SD||'D', loc, dt,
+          r.A1, getId(r.A1),'', r.A2,getId(r.A2),'', r.B1,getId(r.B1),'', r.B2,getId(r.B2),'', '', r.AScore||'', r.BScore||''
+        ].map(f=>`"${f}"`).join(',')+"\n";
+      });
+      // 純 UTF-8 無 BOM，避免某些後台不接受 BOM
+      downloadCSV('dupr_upload_utf8.csv', csv);
+}
+
+async function toggleLock(i) {
+      if(!matchData[i].locked) {
+        matchData[i].locked = true; renderTable();
+      } else {
+        const pwd = document.getElementById('unlockPassword').value.trim(); if(!pwd) return alert('請先輸入密碼！');
+        const h = await hashString(pwd);
+        if(validHashes.includes(h)) { matchData[i].locked = false; renderTable(); }
+        else alert('密碼錯誤無法解鎖');
+      }
+    }
+
+    async function confirmDelete(i) {
+      if(!matchData[i].locked) {
+        if(confirm('確定刪除？')) matchData.splice(i,1), renderTable();
+      } else {
+        const pwd = prompt('已鎖定，請輸入密碼：'); if(!pwd) return;
+        const h = await hashString(pwd);
+        if(validHashes.includes(h) && confirm('密碼正確，確定刪除？')) { matchData.splice(i,1); renderTable(); }
+        else alert('密碼錯誤');
+      }
+    }
+
+    async function hashString(s) {
+      const buf = new TextEncoder().encode(s);
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    }
+
+    
+async function deleteAllMatches(){
+  try {
+    const total = (matchData || []).length;
+    if (!total) { alert('目前沒有任何場次可刪除。'); return; }
+    const hasLocked = (matchData || []).some(m => m && m.locked);
+    let pwd = null;
+    if (hasLocked) {
+      pwd = await new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0';
+        modal.style.left = '0';
+        modal.style.width = '100%';
+        modal.style.height = '100%';
+        modal.style.background = 'rgba(0,0,0,0.5)';
+        modal.style.display = 'flex';
+        modal.style.alignItems = 'center';
+        modal.style.justifyContent = 'center';
+        modal.innerHTML = `
+          <div style="background:#fff;padding:20px;border-radius:8px;max-width:300px;width:100%;">
+            <p>偵測到有鎖定的場次，請輸入解鎖密碼以刪除全部：</p>
+            <input type="password" id="deleteAllPwdInput" style="width:100%;padding:6px;margin-bottom:10px;">
+            <div style="text-align:right;">
+              <button id="deleteAllCancelBtn">取消</button>
+              <button id="deleteAllOkBtn">確定</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.querySelector('#deleteAllCancelBtn').onclick = () => {
+          document.body.removeChild(modal);
+          resolve(null);
+        };
+        modal.querySelector('#deleteAllOkBtn').onclick = () => {
+          const val = modal.querySelector('#deleteAllPwdInput').value;
+          document.body.removeChild(modal);
+          resolve(val);
+        };
+      });
+      if (!pwd) return;
+      const h = await hashString(pwd);
+      if (!validHashes.includes(h)) { alert('密碼錯誤，無法刪除。'); return; }
+    }
+    if (!confirm(`確定要刪除目前場地的所有 ${total} 場資料？此動作無法復原。`)) return;
+    matchData = [];
+    saveMatchData();
+    renderTable();
+  } catch(e){
+    console.warn('deleteAllMatches error:', e);
+    alert('刪除時遇到錯誤，請再試一次。');
+  }
+}
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    const cfg = getTtsConfig();
+    const g = document.getElementById('ttsExtraTextGlobal');
+    if (g) {
+      g.value = cfg.extraText || '';
+      g.addEventListener('input', () => {
+        const c = getTtsConfig();
+        c.extraText = (g.value || '').trim();
+        setTtsConfig(c);
+      });
+    }
+  } catch(e) { console.warn('init global extra text failed', e); }
+
+      initDate();
+      initLocations();
+      initCourtTabs();
+      switchCourt(1);
+    });
+    // === 專注檢視（放大鏡） ===
+    let focusModalInstance = null;
+
+    function focusMatch(idx) {
+      // 準備內容
+      const m = matchData[idx] || {};
+      const players = getPlayers();
+
+      const teamA = `
+        <div class="col-md-6">
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <div class="focus-team-label text-primary mb-2">隊伍 A</div>
+              <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                  <label class="focus-label">A1</label>
+                  <select id="focus_A1" class="form-select focus-select teamA" onchange="updateField(${idx}, 'A1', this.value); refreshFocus(${idx});">
+                    ${createPlayerOptionsFiltered(idx, 'A1', m.A1)}
+                  </select>
+                </div>
+                <div class="col-12 col-lg-6">
+                  <label class="focus-label">A2</label>
+                  <select id="focus_A2" class="form-select focus-select teamA" onchange="updateField(${idx}, 'A2', this.value); refreshFocus(${idx});">
+                    ${createPlayerOptionsFiltered(idx, 'A2', m.A2)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+
+      const teamB = `
+        <div class="col-md-6">
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <div class="focus-team-label text-danger mb-2">隊伍 B</div>
+              <div class="row g-3">
+                <div class="col-12 col-lg-6">
+                  <label class="focus-label">B1</label>
+                  <select id="focus_B1" class="form-select focus-select teamB" onchange="updateField(${idx}, 'B1', this.value); refreshFocus(${idx});">
+                    ${createPlayerOptionsFiltered(idx, 'B1', m.B1)}
+                  </select>
+                </div>
+                <div class="col-12 col-lg-6">
+                  <label class="focus-label">B2</label>
+                  <select id="focus_B2" class="form-select focus-select teamB" onchange="updateField(${idx}, 'B2', this.value); refreshFocus(${idx});">
+                    ${createPlayerOptionsFiltered(idx, 'B2', m.B2)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+
+      const modeAndScore = `
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="row g-3 align-items-center">
+                <div class="col-md-3">
+                  <label class="focus-label">S / D</label>
+                  <select id="focus_SD" class="form-select focus-select" onchange="updateSD(${idx}, this.value); refreshFocus(${idx});">
+                    <option value="S" ${m.SD==='S'?'selected':''}>S</option>
+                    <option value="D" ${m.SD==='D'?'selected':''}>D</option>
+                  </select>
+                </div>
+                <div class="col-md-4 text-center">
+                  <div class="focus-label mb-1">A Score</div>
+                  <input id="focus_AScore" type="number" class="form-control focus-score d-inline-block" value="${m.AScore||''}"
+                    oninput="updateField(${idx}, 'AScore', this.value)">
+                </div>
+                <div class="col-md-2 text-center">
+                  <button class="btn btn-primary btn-lg" onclick="confirmAndLock(${idx})">確定</button>
+                </div>
+                <div class="col-md-3 text-center">
+                  <div class="focus-label mb-1">B Score</div>
+                  <input id="focus_BScore" type="number" class="form-control focus-score d-inline-block" value="${m.BScore||''}"
+                    oninput="updateField(${idx}, 'BScore', this.value)">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+
+      const lockedBtn = m.locked
+        ? `<button class="btn btn-success btn-lg" onclick="toggleLock(${idx}); setTimeout(()=>refreshFocus(${idx}), 0)">🔒 已鎖定</button>`
+        : `<button class="btn btn-outline-success btn-lg" onclick="toggleLock(${idx}); setTimeout(()=>refreshFocus(${idx}), 0)">🔓 未鎖定</button>`;
+
+      const header = `
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div class="focus-title">第 ${idx+1} 場比賽</div>
+          <div class="d-flex gap-2">
+            ${lockedBtn}
+            <button class="btn btn-danger" onclick="confirmDelete(${idx}); const modalEl=document.getElementById('focusModal'); const modal=bootstrap.Modal.getInstance(modalEl); if(modal) modal.hide();">🗑️ 刪除此場</button>
+            <button class="btn btn-secondary" data-bs-dismiss="modal">返回</button>
+          </div>
+        </div>`;
+
+      const html = header + `<div class="row">${teamA}${teamB}${modeAndScore}</div>`;
+
+      const container = document.getElementById('focusContent');
+      container.innerHTML = html;
+
+// 將附加資訊的控制項與 TTS 設定同步（即勾即生效、即輸入即保存）
+try {
+  const cfg0 = getTtsConfig();
+  const cb = document.getElementById('ttsExtraEnabledFocus');
+  const tx = document.getElementById('ttsExtraTextFocus');
+  if (cb) {
+    cb.checked = !!cfg0.extraEnabled;
+    cb.addEventListener('change', () => {
+      const c = getTtsConfig();
+      c.extraEnabled = !!cb.checked;
+      setTtsConfig(c);
+    });
+  }
+  if (tx) {
+    tx.value = cfg0.extraText || '';
+    tx.addEventListener('input', () => {
+      const c = getTtsConfig();
+      c.extraText = (tx.value || '').trim();
+      setTtsConfig(c);
+    });
+  }
+} catch(e) { console.warn('Sync extra rules failed:', e); }
+
+      // 根據 S/D 規則調整 A2 / B2
+      renderFocusedSDRules(idx, m.SD);
+
+      // 開啟 Modal
+      const modalEl = document.getElementById('focusModal');
+      focusModalInstance = focusModalInstance || new bootstrap.Modal(modalEl);
+      focusModalInstance.show();
+    }
+
+    function refreshFocus(idx) {
+      // 重新渲染整體列表，確保同步
+      renderTable();
+      // 重新開啟當前專注內容（若 modal 正在開啟中則更新內容即可）
+      const modalEl = document.getElementById('focusModal');
+      if (modalEl.classList.contains('show')) {
+        focusMatch(idx);
+      }
+    }
+
+    function confirmAndLock(idx) {
+      const aEl = document.getElementById('focus_AScore');
+      const bEl = document.getElementById('focus_BScore');
+      const aVal = aEl ? aEl.value : '';
+      const bVal = bEl ? bEl.value : '';
+      // 寫回比分（保險再寫一次）
+      if (aEl) updateField(idx, 'AScore', aVal);
+      if (bEl) updateField(idx, 'BScore', bVal);
+      saveMatchData && saveMatchData();
+      if (confirm('是否確認此比分？確認後將直接鎖定該場比賽')) {
+        matchData[idx].locked = true; // set true safely
+        saveMatchData();
+        renderTable();
+        // 關閉 Modal
+        const modalEl = document.getElementById('focusModal');
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.hide();
+        // 返回主畫面後自動檢查下一場次或結束播報
+        setTimeout(() => {
+          try {
+            const nextIdx = findNextUnfinishedIndex(idx);
+            if (nextIdx >= 0) {
+              announceMatch(nextIdx);
+            } else {
+              const total = (matchData || []).filter(mm => mm && mm.locked === true).length;
+              speak(`本日賽程已結束，共進行了 ${total} 場比賽。`);
+            }
+          } catch(e){ console.warn('post-confirm announce failed', e); }
+        }, 400);
+        }
+    }
+
+    function renderFocusedSDRules(idx, sd) {
+      const a2 = document.getElementById('focus_A2');
+      const b2 = document.getElementById('focus_B2');
+      if (!a2 || !b2) return;
+      if (sd === 'S') {
+        a2.disabled = true; a2.value = '';
+        b2.disabled = true; b2.value = '';
+      } else {
+        a2.disabled = false; b2.disabled = false;
+      }
+    }
+
+    
+    // 尋找下一場尚未完成（未鎖定）且具備基本選手資訊的場次
+    function findNextUnfinishedIndex(startIdx){
+      for(let i = startIdx + 1; i < matchData.length; i++){
+        const m = matchData[i];
+        if(!m) continue;
+        if(m.locked === true) continue; // 已完成
+        // 至少 A1 與 B1 需存在，單打/雙打皆適用（雙打若 A2/B2 未填，也先允許播報）
+        if((m.A1 && String(m.A1).trim()) && (m.B1 && String(m.B1).trim())){
+          return i;
+        }
+      }
+      return -1;
+    }
+    // === 語音播報：點選場次編號讀出上場選手 ===
+    let zhTwVoice = null;
+    function loadVoices() {
+      const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      // 嘗試找繁中語音（zh-TW 或 zh_HANT 等）
+      zhTwVoice = null;
+      for (const v of voices) {
+        const lang = (v.lang || '').toLowerCase();
+        if (lang.includes('zh') && (lang.includes('tw') || lang.includes('hant'))) {
+          zhTwVoice = v;
+          break;
+        }
+      }
+      return voices;
+    }
+    if (window.speechSynthesis) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = () => loadVoices();
+    }
+
+    function speak(text) {
+      if (!window.speechSynthesis) {
+        alert(text); // 瀏覽器不支持時至少顯示文字
+        return;
+      }
+      window.speechSynthesis.cancel(); // 停掉前一段
+      const utter = new SpeechSynthesisUtterance(text);
+      if (zhTwVoice) utter.voice = zhTwVoice;
+      utter.lang = zhTwVoice ? zhTwVoice.lang : 'zh-TW';
+      utter.rate = 1; // 語速
+      utter.pitch = 1;
+      window.speechSynthesis.speak(utter);
+    }
+
+    function buildAnnouncement(m, idx) {
+      const n = (idx + 1);
+      const isSingles = (m.SD === 'S');
+      const A1 = m.A1 || 'A1';
+      const A2 = m.A2 || '';
+      const B1 = m.B1 || 'B1';
+      const B2 = m.B2 || '';
+      if (isSingles) {
+        return `第 ${n} 場次，A隊：${A1}，對上，B隊：${B1}。`;
+      } else {
+        const aPair = (A1 && A2) ? `${A1} 與 ${A2}` : `${A1}${A2?(' 與 ' + A2):''}`;
+        const bPair = (B1 && B2) ? `${B1} 與 ${B2}` : `${B1}${B2?(' 與 ' + B2):''}`;
+        return `第 ${n} 場次，A隊：${aPair}，B隊：${bPair}。`;
+      }
+    }
+
+    function announceMatch(idx) {
+      const m = matchData[idx];
+      if (!m) return;
+      // 使用 composeAnnouncement：會依規則自動接上「附加資訊」與「結尾語」，順序為：選手介紹 → 附加資訊（未鎖定且勾選） → 結尾語。
+      const text = composeAnnouncement(m, idx);
+      speak(text);
+    }
+
+    // === TTS 設定（可選語音、語速、音高，並保存於 localStorage） ===
+    const TTS_CFG_KEY = 'tts_config_v1';
+    function getTtsConfig() {
+      try { return JSON.parse(localStorage.getItem(TTS_CFG_KEY)) || {}; } catch { return {}; }
+    }
+    function setTtsConfig(cfg) {
+      localStorage.setItem(TTS_CFG_KEY, JSON.stringify(cfg || {}));
+    }
+
+    function populateVoiceSelect() {
+      const sel = document.getElementById('ttsVoiceSelect');
+      if (!sel || !window.speechSynthesis) return;
+      const voices = window.speechSynthesis.getVoices();
+      sel.innerHTML = '';
+      const cfg = getTtsConfig();
+
+      // 排序：中文在前（zh-* 或 hans/hant），再其他；同語系按名稱
+      const sorted = [...voices].sort((a,b)=>{
+        const ax = ((a.lang||'') + a.name).toLowerCase();
+        const bx = ((b.lang||'') + b.name).toLowerCase();
+        const aZh = ax.includes('zh') || ax.includes('hant') || ax.includes('hans');
+        const bZh = bx.includes('zh') || bx.includes('hant') || bx.includes('hans');
+        if (aZh !== bZh) return aZh ? -1 : 1;
+        return ax.localeCompare(bx);
+      });
+
+      sorted.forEach(v=>{
+        const opt = document.createElement('option');
+        opt.value = v.voiceURI || v.name;
+        opt.textContent = `${v.name} — ${v.lang}`;
+        sel.appendChild(opt);
+      });
+
+      // 預設選擇：先用已保存，其次 zh-TW/hant，其次第一個
+      let chosen = cfg.voiceURI;
+      if (!chosen) {
+        const firstZh = sorted.find(v=>{
+          const L=(v.lang||'').toLowerCase();
+          return L.includes('zh') && (L.includes('tw') || L.includes('hant'));
+        }) || sorted.find(v=>(v.lang||'').toLowerCase().includes('zh'));
+        chosen = firstZh ? (firstZh.voiceURI || firstZh.name) : (sorted[0] ? (sorted[0].voiceURI || sorted[0].name) : '');
+      }
+      if (chosen) sel.value = chosen;
+      document.getElementById('ttsRate').value = cfg.rate ?? 0.95;
+      document.getElementById('ttsPitch').value = cfg.pitch ?? 1.0;
+      document.getElementById('ttsRateVal').textContent = document.getElementById('ttsRate').value;
+      document.getElementById('ttsPitchVal').textContent = document.getElementById('ttsPitch').value;
+      if (document.getElementById('ttsEndingLocked')) document.getElementById('ttsEndingLocked').value = cfg.endingLocked ?? '';
+      if (document.getElementById('ttsEndingUnlocked')) document.getElementById('ttsEndingUnlocked').value = cfg.endingUnlocked ?? '';
+      if (document.getElementById('ttsExtraEnabled')) /* removed: extraEnabled checkbox */
+      if (document.getElementById('ttsExtraText')) document.getElementById('ttsExtraText').value = cfg.extraText ?? '';
+    }
+
+    function getVoiceByURI(uri) {
+      const voices = window.speechSynthesis.getVoices();
+      return voices.find(v => (v.voiceURI === uri) || (v.name === uri));
+    }
+
+    // 覆寫 speak，使其採用使用者設定
+    function speak(text) {
+      if (!window.speechSynthesis) {
+        alert(text);
+        return;
+      }
+      const cfg = getTtsConfig();
+      const pick = getVoiceByURI(cfg.voiceURI) || zhTwVoice;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      if (pick) utter.voice = pick;
+      utter.lang = pick?.lang || 'zh-TW';
+      utter.rate = Number(cfg.rate ?? 0.95);
+      utter.pitch = Number(cfg.pitch ?? 1.0);
+      window.speechSynthesis.speak(utter);
+    }
+
+    // 初始化 modal 控制
+    document.addEventListener('DOMContentLoaded', ()=>{
+      if (window.speechSynthesis) {
+        populateVoiceSelect();
+        window.speechSynthesis.onvoiceschanged = populateVoiceSelect;
+      }
+      const rate = document.getElementById('ttsRate');
+      const pitch = document.getElementById('ttsPitch');
+      if (rate) rate.addEventListener('input', ()=>{ document.getElementById('ttsRateVal').textContent = rate.value; });
+      if (pitch) pitch.addEventListener('input', ()=>{ document.getElementById('ttsPitchVal').textContent = pitch.value; });
+
+      const preview = document.getElementById('ttsPreviewBtn');
+      if (preview) preview.addEventListener('click', ()=>{
+        const sel = document.getElementById('ttsVoiceSelect');
+        const cfg = getTtsConfig();
+        cfg.voiceURI = sel.value;
+        cfg.rate = Number(document.getElementById('ttsRate').value);
+        cfg.pitch = Number(document.getElementById('ttsPitch').value);
+        setTtsConfig(cfg);
+        // 用目前下一個未鎖定場次做試聽，找不到則用預設句
+        const idx = (matchData || []).findIndex(m=>!m.locked);
+        let text = '這是語音測試。';
+        if (idx>=0) {
+          text = composeAnnouncement(matchData[idx], idx);
+        } else {
+          // 若全部鎖定，取最後一場試聽
+          const j = (matchData || []).length - 1;
+          if (j>=0) text = composeAnnouncement(matchData[j], j);
+        }
+        speak(text);
+      });
+
+      const save = document.getElementById('ttsSaveBtn');
+      if (save) save.addEventListener('click', ()=>{
+        const cfg = getTtsConfig();
+        cfg.voiceURI = document.getElementById('ttsVoiceSelect').value;
+        cfg.rate = Number(document.getElementById('ttsRate').value);
+        cfg.pitch = Number(document.getElementById('ttsPitch').value);
+        cfg.endingLocked = (document.getElementById('ttsEndingLocked').value || '').trim();
+        cfg.endingUnlocked = (document.getElementById('ttsEndingUnlocked').value || '').trim();
+        setTtsConfig(cfg);
+        const modalEl = document.getElementById('ttsSettingsModal');
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.hide();
+      });
+    });
+
+    // === 比賽地點清單（localStorage） ===
+    const LOC_KEY = 'dupr_locations_v1';
+    const LOC_SEL_KEY = 'dupr_selected_location_v1';
+
+    function getLocations() {
+      try { return JSON.parse(localStorage.getItem(LOC_KEY)) || []; } catch { return []; }
+    }
+    function setLocations(list) {
+      localStorage.setItem(LOC_KEY, JSON.stringify(list || []));
+      try { scheduleSaveLocations && scheduleSaveLocations(); } catch(e) { /* ignore */ }
+    }
+
+    function renderLocationOptions() {
+      const sel = document.getElementById('locationInput');
+      if (!sel) return;
+      const list = getLocations();
+      sel.innerHTML = '';
+      list.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc;
+        opt.textContent = loc;
+        sel.appendChild(opt);
+      });
+      const chosen = localStorage.getItem(LOC_SEL_KEY);
+      if (chosen && list.includes(chosen)) {
+        sel.value = chosen;
+      } else if (list.length) {
+        sel.value = list[0];
+        localStorage.setItem(LOC_SEL_KEY, list[0]);
+      }
+      sel.addEventListener('change', () => {
+        localStorage.setItem(LOC_SEL_KEY, sel.value);
+      }, { once: true });
+      sel.addEventListener('change', () => { try { scheduleSaveLocations && scheduleSaveLocations(); } catch(e){} });
+    }
+
+    function initLocations() {
+      const sel = document.getElementById('locationInput');
+      if (!sel) return;
+      let list = getLocations();
+      const def = sel.getAttribute('data-default');
+      // 初次使用自動帶入預設地點
+      if (!list.length && def) list = [def];
+      // 去重
+      list = Array.from(new Set(list.filter(Boolean)));
+      setLocations(list);
+      renderLocationOptions();
+    }
+
+    function addLocation() {
+      const name = (prompt('請輸入新的比賽地點：') || '').trim();
+      if (!name) return;
+      let list = getLocations();
+      if (!list.includes(name)) {
+        list.push(name);
+        setLocations(list);
+      }
+      localStorage.setItem(LOC_SEL_KEY, name);
+      renderLocationOptions();
+    }
+
+    // === 地點管理（重命名、刪除、排序） ===
+    function renderLocationsManager() {
+      const list = getLocations();
+      const ul = document.getElementById('locMgrList');
+      if (!ul) return;
+      ul.innerHTML = '';
+      list.forEach((name, i) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+        li.innerHTML = `
+          <span class="text-truncate" style="max-width: 70%">${name}</span>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" title="上移" onclick="moveLocation(${i}, -1)">▲</button>
+            <button class="btn btn-outline-secondary" title="下移" onclick="moveLocation(${i}, 1)">▼</button>
+            <button class="btn btn-outline-primary" title="重命名" onclick="renameLocation(${i})">✎</button>
+            <button class="btn btn-outline-danger" title="刪除" onclick="deleteLocation(${i})">🗑</button>
+          </div>`;
+        ul.appendChild(li);
+      });
+    }
+
+    function renameLocation(i) {
+      let list = getLocations();
+      const old = list[i];
+      const name = (prompt('請輸入新的地點名稱：', old) || '').trim();
+      if (!name) return;
+      if (list.includes(name) && name !== old) {
+        alert('此名稱已存在，請改用其他名稱。');
+        return;
+      }
+      list[i] = name;
+      setLocations(list);
+      // 若改名的是目前選擇的地點，同步更新選擇
+      const sel = localStorage.getItem(LOC_SEL_KEY);
+      if (sel === old) localStorage.setItem(LOC_SEL_KEY, name);
+      renderLocationOptions();
+      renderLocationsManager();
+    }
+
+    function deleteLocation(i) {
+      let list = getLocations();
+      const target = list[i];
+      if (!confirm(`確定刪除「${target}」？`)) return;
+      list.splice(i, 1);
+      setLocations(list);
+      // 如刪除目前選擇的地點，切回第一個或清空
+      const sel = localStorage.getItem(LOC_SEL_KEY);
+      if (sel === target) {
+        if (list.length) localStorage.setItem(LOC_SEL_KEY, list[0]);
+        else localStorage.removeItem(LOC_SEL_KEY);
+      }
+      renderLocationOptions();
+      renderLocationsManager();
+    }
+
+    function moveLocation(i, dir) {
+      let list = getLocations();
+      const j = i + dir;
+      if (j < 0 || j >= list.length) return;
+      const tmp = list[i];
+      list[i] = list[j];
+      list[j] = tmp;
+      setLocations(list);
+      renderLocationOptions();
+      renderLocationsManager();
+    }
+
+    // 顯示管理視窗時刷新列表
+    document.addEventListener('DOMContentLoaded', () => {
+      const modalEl = document.getElementById('locationsManagerModal');
+      if (modalEl) {
+        modalEl.addEventListener('shown.bs.modal', renderLocationsManager);
+      }
+    });
+
+    // === 比賽日期：預設今日，且記住最後選擇 ===
+    const DATE_KEY = 'dupr_selected_date_v1';
+    function initDate() {
+      const el = document.getElementById('dateInput');
+      if (!el) return;
+      let saved = localStorage.getItem(DATE_KEY);
+      if (saved) {
+        el.value = saved;
+      } else {
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth()+1).padStart(2,'0');
+        const dd = String(now.getDate()).padStart(2,'0');
+        el.value = `${yyyy}-${mm}-${dd}`;
+      }
+      el.addEventListener('change', ()=>{
+        localStorage.setItem(DATE_KEY, el.value || '');
+      }, { once: true });
+    }
+
+    function replaceVars(tpl, vars) {
+      return (tpl || '').replace(/\{(\w+)\}/g, (_, k) => (k in vars ? vars[k] : ''));
+    }
+
+    function buildEnding(m, idx) {
+      const cfg = getTtsConfig();
+      const n = idx + 1;
+      const court = (localStorage.getItem('courtName_' + (currentCourt||1)) || (currentCourt + '號場地'));
+      if (m.locked) {
+        const a = parseInt(m.AScore, 10);
+        const b = parseInt(m.BScore, 10);
+        let winner = '';
+        if (!isNaN(a) && !isNaN(b) && a !== b) {
+          winner = (a > b) ? 'A隊' : 'B隊';
+        } else {
+          // 無法判定或平手
+          winner = '雙方（比分未判定）';
+        }
+        const tpl = cfg.endingLocked || '本場比賽由 {winner} 獲勝。';
+        return replaceVars(tpl, { winner, court, match: `第 ${n} 場次` });
+      } else {
+        const tpl = cfg.endingUnlocked || '請雙方隊伍選手至 {court} 進行比賽。';
+        return replaceVars(tpl, { court, match: `第 ${n} 場次` });
+      }
+    }
+
+    function composeAnnouncement(m, idx) {
+      const base = buildAnnouncement(m, idx);
+      const cfg = getTtsConfig();
+      let extra = '';
+      if (cfg.extraText && cfg.extraText.trim()) {
+        extra = ' ' + cfg.extraText.trim();
+      }
+      const ending = buildEnding(m, idx);
+      return base + extra + (ending ? (' ' + ending) : '');
+    }
+
+    // 覆寫 announceMatch 使用 composeAnnouncement（含結尾用語）
+    function announceMatch(idx) {
+      const m = matchData[idx];
+      if (!m) return;
+      const text = composeAnnouncement(m, idx);
+      speak(text);
+    }
+
+  </script>
+
+  <!-- Focus Modal -->
+  <div class="modal fade" id="focusModal" tabindex="-1" aria-labelledby="focusModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="focusModalLabel">專注檢視</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div id="focusContent" class="container py-3"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">返回</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- 語音設定 Modal -->
+  <div class="modal fade" id="ttsSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">語音設定</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">語音（Voice）</label>
+            <select id="ttsVoiceSelect" class="form-select"></select>
+            <div class="form-text">建議選擇 zh-TW/繁體中文 或你覺得自然的中文語音。</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">語速（Rate） <span id="ttsRateVal"></span></label>
+            <input id="ttsRate" type="range" min="0.7" max="1.2" step="0.05" value="95%" class="form-range">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">音高（Pitch） <span id="ttsPitchVal"></span></label>
+            <input id="ttsPitch" type="range" min="0.8" max="1.2" step="0.05" value="1.00" class="form-range">
+          </div>
+          <hr/>
+          <div class="mb-2">
+            <label class="form-label">播報結尾用語（鎖定場次）</label>
+            <input id="ttsEndingLocked" type="text" class="form-control" placeholder="本場比賽由 {winner} 獲勝。">
+            <div class="form-text">可用變數：{winner}（A隊/B隊），{court}（目前場地名稱），{match}（第 N 場次）。</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">播報結尾用語（未鎖定場次）</label>
+            <input id="ttsEndingUnlocked" type="text" class="form-control" placeholder="請雙方隊伍選手至 {court} 進行比賽。">
+            <div class="form-text">例如：請雙方隊伍選手至 積穗國小3號球場 進行比賽。也可用 {court} 自動帶入目前場地名稱。</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-secondary" id="ttsPreviewBtn">試聽</button>
+            <button class="btn btn-primary" id="ttsSaveBtn">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 地點管理 Modal -->
+  <div class="modal fade" id="locationsManagerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">地點管理</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="form-text">可重命名、刪除、排序。排序會直接影響下拉清單的顯示順序。</div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addLocation(); renderLocationsManager();">＋ 新增地點</button>
+          </div>
+          <ul class="list-group" id="locMgrList"></ul>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+<script>
+(function(){
+  function getExtraTemplates(){
+    try { return JSON.parse(localStorage.getItem('ttsExtraTemplates') || '[]'); }
+    catch(e){ return []; }
+  }
+  function setExtraTemplates(arr){
+    const clean = Array.from(new Set((arr || []).map(s => (s || '').trim()).filter(Boolean)));
+    localStorage.setItem('ttsExtraTemplates', JSON.stringify(clean));
+  }
+  function populateExtraTemplateSelect(){
+    const sel = document.getElementById('ttsExtraTemplateSelect');
+    if(!sel) return;
+    const list = getExtraTemplates();
+    sel.innerHTML = '';
+    if(list.length === 0){
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '（尚無範本）';
+      sel.appendChild(opt);
+      sel.disabled = true;
+    } else {
+      sel.disabled = false;
+      list.forEach((t, i) => {
+        const opt = document.createElement('option');
+        opt.value = String(i);
+        opt.textContent = t;
+        sel.appendChild(opt);
+      });
+    }
+  }
+  window.addEventListener('DOMContentLoaded', () => {
+    const g = document.getElementById('ttsExtraTextGlobal');
+    const sel = document.getElementById('ttsExtraTemplateSelect');
+    const btnApply  = document.getElementById('extraTplApplyBtn');
+    const btnSave   = document.getElementById('extraTplSaveBtn');
+    const btnUpdate = document.getElementById('extraTplUpdateBtn');
+    const btnDelete = document.getElementById('extraTplDeleteBtn');
+
+    populateExtraTemplateSelect();
+
+    btnSave && btnSave.addEventListener('click', () => {
+      const v = (g?.value || '').trim();
+      if(!v) return;
+      const list = getExtraTemplates();
+      if(!list.includes(v)) list.push(v);
+      setExtraTemplates(list);
+      populateExtraTemplateSelect();
+      const idx = getExtraTemplates().indexOf(v);
+      if(sel && idx >= 0) sel.value = String(idx);
+    });
+
+    btnApply && btnApply.addEventListener('click', () => {
+      const list = getExtraTemplates();
+      const idx = parseInt(sel?.value ?? '-1', 10);
+      if(!isNaN(idx) && list[idx] != null && g){
+        g.value = list[idx];
+        // 觸發原本的 input 監聽，讓設定即時保存
+        g.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
+    btnUpdate && btnUpdate.addEventListener('click', () => {
+      const list = getExtraTemplates();
+      const idx = parseInt(sel?.value ?? '-1', 10);
+      const v = (g?.value || '').trim();
+      if(!isNaN(idx) && idx >= 0 && list[idx] != null && v){
+        list[idx] = v;
+        setExtraTemplates(list);
+        populateExtraTemplateSelect();
+        if(sel) sel.value = String(idx);
+      }
+    });
+
+    btnDelete && btnDelete.addEventListener('click', () => {
+      const list = getExtraTemplates();
+      const idx = parseInt(sel?.value ?? '-1', 10);
+      if(!isNaN(idx) && idx >= 0 && list[idx] != null){
+        list.splice(idx, 1);
+        setExtraTemplates(list);
+        populateExtraTemplateSelect();
+      }
+    });
+  });
+})();
+</script>
+
+
+  <!-- Firebase (optional, used for cross-device sync of locations) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore-compat.js"></script>
+  <script>
+    (function(){
+      let fbApp = null, auth = null, db = null, currentUser = null;
+      let locDocUnsub = null;
+      let suppressCloudSave = false;
+
+      function getFirebaseConfig(){
+        try {
+          const raw = localStorage.getItem('dupr_firebase_config_json');
+          if (raw) return JSON.parse(raw);
+        } catch(e){}
+        return null;
+      }
+
+      window.promptFirebaseConfig = function(){
+        const oldV = localStorage.getItem('dupr_firebase_config_json') || '{\n  "apiKey": "",\n  "authDomain": "",\n  "projectId": ""\n}';
+        const v = prompt('請貼上 Firebase 設定 JSON（僅需 apiKey / authDomain / projectId）\n\n貼上後會保存到此裝置的瀏覽器儲存，之後可隨時修改。', oldV);
+        if (!v) return;
+        try {
+          const cfg = JSON.parse(v);
+          if (!cfg.apiKey || !cfg.projectId) throw new Error('缺少必要欄位');
+          localStorage.setItem('dupr_firebase_config_json', JSON.stringify(cfg));
+          alert('設定已保存，現在重新整理頁面以生效。');
+          location.reload();
+        } catch(e){
+          alert('JSON 格式錯誤或缺少欄位：' + e.message);
+        }
+      };
+
+      function initFirebase(){
+        const cfg = getFirebaseConfig();
+        if (!cfg || !window.firebase || !firebase.initializeApp) { updateAuthUI(); return; }
+        try {
+          fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg);
+          auth = firebase.auth();
+          db = firebase.firestore();
+          auth.onAuthStateChanged(async (u) => {
+            currentUser = u || null;
+            updateAuthUI();
+            if (currentUser) {
+              attachLocationsListener();
+              await syncLocationsFromCloud();
+            } else {
+              detachLocationsListener();
+            }
+          });
+        } catch(e){
+          console.warn('Firebase init failed:', e);
+        }
+      }
+
+      function updateAuthUI(){
+        const loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const status = document.getElementById('authStatus');
+        const hasCfg = !!getFirebaseConfig();
+        if (loginBtn) loginBtn.disabled = !hasCfg;
+        if (status) {
+          if (!hasCfg) status.textContent = '尚未設定 Firebase：目前僅保存在此裝置';
+          else if (!currentUser) status.textContent = '未登入：目前僅保存在此裝置（可登入以啟用跨裝置同步）';
+          else status.textContent = '已登入：' + (currentUser.email || currentUser.uid) + '（地點將自動與雲端同步）';
+        }
+        if (loginBtn) loginBtn.classList.toggle('d-none', !!currentUser);
+        if (logoutBtn) logoutBtn.classList.toggle('d-none', !currentUser);
+      }
+
+      window.signInWithGoogle = async function(){
+        if (!auth) { alert('尚未設定 Firebase。請先點「Firebase 設定」。'); return; }
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          await auth.signInWithPopup(provider);
+        } catch(e){
+          console.warn('signIn failed:', e);
+          alert('登入失敗：' + (e && e.message ? e.message : e));
+        }
+      };
+
+      window.signOutFirebase = async function(){
+        if (!auth) return;
+        await auth.signOut();
+      };
+
+      function getCloudDocRef(){
+        if (!db || !currentUser) return null;
+        return db.collection('dupr_locations').doc(currentUser.uid);
+      }
+
+      function detachLocationsListener(){
+        if (locDocUnsub) { locDocUnsub(); locDocUnsub = null; }
+      }
+
+      function attachLocationsListener(){
+        detachLocationsListener();
+        const ref = getCloudDocRef();
+        if (!ref) return;
+        locDocUnsub = ref.onSnapshot((snap)=>{
+          const data = snap && snap.exists ? snap.data() : null;
+          if (!data) return;
+          const cloud = Array.from(new Set((data.locations || []).filter(Boolean)));
+          const chosen = data.selected || '';
+          suppressCloudSave = true;
+          try {
+            const localList = getLocations();
+            const equals = JSON.stringify(localList) === JSON.stringify(cloud);
+            const localSel = (localStorage.getItem('dupr_selected_location_v1') || '');
+            if (!equals || localSel !== chosen) {
+              setLocations(cloud);
+              if (chosen) localStorage.setItem('dupr_selected_location_v1', chosen);
+              renderLocationOptions && renderLocationOptions();
+            }
+          } finally {
+            suppressCloudSave = false;
+          }
+        }, (err)=>console.warn('onSnapshot error:', err));
+      }
+
+      async function readCloudLocations(){
+        const ref = getCloudDocRef(); if (!ref) return { locations: [], selected: '' };
+        const snap = await ref.get();
+        if (!snap.exists) return { locations: [], selected: '' };
+        const data = snap.data() || {};
+        return { locations: Array.from(new Set((data.locations || []).filter(Boolean))), selected: data.selected || '' };
+      }
+
+      async function writeCloudLocations(list, selected){
+        const ref = getCloudDocRef(); if (!ref) return;
+        await ref.set({
+          locations: Array.from(new Set((list || []).filter(Boolean))),
+          selected: selected || '',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+
+      window.syncLocationsNow = async function(){
+        try {
+          await syncLocationsFromCloud(true);
+          alert('同步完成');
+        } catch(e){
+          alert('同步失敗：' + (e && e.message ? e.message : e));
+        }
+      };
+
+      async function syncLocationsFromCloud(forceWrite=false){
+        if (!db || !currentUser) return;
+        const cloud = await readCloudLocations();
+        const localList = getLocations();
+        const localSel = (localStorage.getItem('dupr_selected_location_v1') || '');
+        const merged = Array.from(new Set([...(cloud.locations||[]), ...(localList||[])]));
+        const chosen = localSel || cloud.selected || (merged[0] || '');
+
+        const cloudChanged = JSON.stringify(merged) !== JSON.stringify(cloud.locations || []) || (chosen !== (cloud.selected || ''));
+        const localChanged = JSON.stringify(merged) !== JSON.stringify(localList) || chosen !== localSel;
+
+        if (localChanged) {
+          suppressCloudSave = true;
+          try {
+            setLocations(merged);
+            if (chosen) localStorage.setItem('dupr_selected_location_v1', chosen);
+            renderLocationOptions && renderLocationOptions();
+          } finally {
+            suppressCloudSave = false;
+          }
+        }
+        if (cloudChanged || forceWrite) {
+          await writeCloudLocations(merged, chosen);
+        }
+      }
+
+      let saveLocTimer = null;
+      window.scheduleSaveLocations = function(){
+        if (suppressCloudSave) return;
+        if (!db || !currentUser) return;
+        clearTimeout(saveLocTimer);
+        saveLocTimer = setTimeout(async () => {
+          try {
+            const list = getLocations();
+            const sel = (localStorage.getItem('dupr_selected_location_v1') || '');
+            await writeCloudLocations(list, sel);
+          } catch(e){ console.warn('save to cloud failed', e); }
+        }, 500);
+      };
+
+      document.addEventListener('DOMContentLoaded', () => {
+        try {
+          initFirebase();
+          const modalEl = document.getElementById('locationsManagerModal');
+          if (modalEl) {
+            modalEl.addEventListener('shown.bs.modal', () => {
+              const hdr = modalEl.querySelector('.modal-header');
+              if (hdr && !hdr.querySelector('#syncLocationsBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'syncLocationsBtn';
+                btn.className = 'btn btn-sm btn-outline-primary';
+                btn.textContent = '↺ 同步雲端';
+                btn.onclick = () => window.syncLocationsNow && window.syncLocationsNow();
+                const right = hdr.querySelector('.btn-close');
+                hdr.insertBefore(btn, right);
+              }
+            });
+          }
+        } catch(e){ console.warn('init sync ui failed', e); }
+      });
+
+    })();
+  </script>
+
+
+<script>
+(function(){
+  const server = localStorage.getItem('cloud_tts_server') || 'http://localhost:8787/api/tts';
+
+  const pref = {
+    useCloud: localStorage.getItem('use_cloud_tts') === '1',
+    voice: localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural',
+    rate:  localStorage.getItem('cloud_rate')  || '0.95',
+    pitch: localStorage.getItem('cloud_pitch') || '+6%'
+  };
+
+  const chkMain = document.getElementById('useCloudTTSChk_main');
+  const sel = document.getElementById('cloudVoiceSelect');
+  const rateI = document.getElementById('cloudRateInput');
+  const pitchI= document.getElementById('cloudPitchInput');
+  const saveBtn = document.getElementById('cloudSaveBtn');
+
+  if (chkMain && sel && rateI && pitchI) {
+    chkMain.checked = pref.useCloud;
+    sel.value = pref.voice;
+    rateI.value = pref.rate;
+    pitchI.value = pref.pitch;
+
+    chkMain.addEventListener('change', ()=>{
+      localStorage.setItem('use_cloud_tts', chkMain.checked ? '1' : '0');
+      window.useCloudTTS = chkMain.checked;
+    });
+    saveBtn.addEventListener('click', ()=>{
+      localStorage.setItem('cloud_voice', sel.value);
+      localStorage.setItem('cloud_rate', rateI.value);
+      localStorage.setItem('cloud_pitch', pitchI.value);
+      alert('雲端語音設定已保存');
+    });
+  }
+
+  window.useCloudTTS = localStorage.getItem('use_cloud_tts') === '1';
+
+  const audioCache = new Map();
+
+  function normalizeForSpeech(text){
+    if (!text) return '';
+    let t = text;
+    t = t.replace(/：/g, '： ')
+         .replace(/，/g, '， ')
+         .replace(/、/g, '、 ')
+         .replace(/。/g, '。 ');
+    t = t.replace(/\bDUPR\b/gi, 'D U P R')
+         .replace(/\bMLP\b/gi, 'M L P')
+         .replace(/\bPPA\b/gi, 'P P A');
+    t = t.replace(/(^|\s)(\d{1,2})[\-:](\d{1,2})(?=\s|$)/g, (m, p, a, b)=> `${p}${a} 比 ${b}`);
+    return t.trim();
+  }
+
+  function splitSentences(text){
+    const parts = [];
+    let buf = '';
+    for (const ch of text){
+      buf += ch;
+      if ('。！？；'.includes(ch) || buf.length > 180){
+        parts.push(buf.trim());
+        buf = '';
+      }
+    }
+    if (buf.trim()) parts.push(buf.trim());
+    return parts;
+  }
+
+  async function speakViaCloudOne(text){
+    const payload = {
+      text: text,
+      voice: localStorage.getItem('cloud_voice') || pref.voice,
+      rate:  localStorage.getItem('cloud_rate')  || pref.rate,
+      pitch: localStorage.getItem('cloud_pitch') || pref.pitch
+    };
+    const key = JSON.stringify(payload);
+    try{
+      let url = audioCache.get(key);
+      if (!url){
+        const resp = await fetch(server, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if(!resp.ok) throw new Error('TTS server error');
+        const blob = await resp.blob();
+        url = URL.createObjectURL(blob);
+        audioCache.set(key, url);
+      }
+      await new Promise((resolve, reject)=>{
+        const audio = new Audio(url);
+        audio.onended = resolve;
+        audio.onerror = ()=> reject(new Error('audio playback error'));
+        audio.play().catch(reject);
+      });
+      return true;
+    }catch(e){
+      console.warn('Cloud TTS failed for chunk:', e);
+      return false;
+    }
+  }
+
+  async function speakViaCloud(text){
+    const norm = normalizeForSpeech(text);
+    const chunks = splitSentences(norm);
+    for (const c of chunks){
+      const ok = await speakViaCloudOne(c);
+      if (!ok) return false;
+      await new Promise(r=>setTimeout(r, 250));
+    }
+    return true;
+  }
+  window.speakViaCloud = speakViaCloud;
+
+  let preferredVoice = null;
+  function pickBestVoice(voices) {
+    const names = [
+      "Google 國語（臺灣）","Microsoft HanHan Online (Natural) - Chinese (Taiwan)",
+      "Ting-Ting","Mei-Jia","Google 中文（普通话）",
+      "Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)",
+      "Microsoft Aria Online (Natural) - English (United States)","Google US English","Jenny"
+    ];
+    const byName = voices.find(v => names.includes(v.name));
+    return byName || voices[0];
+  }
+  function initLocalVoices(){
+    const load = ()=>{
+      const voices = speechSynthesis.getVoices();
+      if (voices?.length) preferredVoice = pickBestVoice(voices);
+    };
+    load(); window.speechSynthesis.onvoiceschanged = load;
+  }
+  initLocalVoices();
+
+  function speakLocal(text){
+    const norm = normalizeForSpeech(text);
+    const parts = splitSentences(norm);
+    speechSynthesis.cancel();
+    for (const p of parts){
+      const u = new SpeechSynthesisUtterance(p);
+      if (preferredVoice) u.voice = preferredVoice;
+      u.rate = 0.97; u.pitch = 1.06; u.volume = 1.0;
+      speechSynthesis.speak(u);
+    }
+  }
+  window.speakLocal = speakLocal;
+
+  async function speakUnified(fullText){
+    if (window.useCloudTTS){
+      const ok = await speakViaCloud(fullText);
+      if (ok) return;
+      speakLocal(fullText);
+    } else {
+      speakLocal(fullText);
+    }
+  }
+  window.speakUnified = speakUnified;
+
+  if (!window.speakText_original){
+    window.speakText_original = window.speakText || function(t){ speakLocal(t); };
+    window.speakText = function(t){ speakUnified(t); };
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  const hook = ()=>{
+    if (!window.speak_original){
+      window.speak_original = window.speak || function(t){ window.speakLocal ? window.speakLocal(t) : alert(t); };
+      window.speak = function(t){ if (window.speakUnified) { window.speakUnified(t); } else { window.speak_original(t); } };
+    }
+  };
+  try{ hook(); }catch(e){}
+  window.addEventListener('DOMContentLoaded', hook);
+})();
+</script>
+
+
+<script>
+// Strong hook for global speak(): always route to cloud-first pipeline
+(function(){
+  function callUnified(t){
+    try {
+      // read latest toggle every call
+      window.useCloudTTS = (localStorage.getItem('use_cloud_tts') === '1');
+      if (typeof window.speakUnified === 'function') {
+        return window.speakUnified(t);
+      }
+    } catch (e) { console.warn(e); }
+    // fallback to original or local
+    if (typeof window.speak_original === 'function') return window.speak_original(t);
+    if (typeof window.speakLocal === 'function') return window.speakLocal(t);
+    alert(t);
+  }
+
+  // keep reference to the latest assigned original speak
+  let _original = (typeof window.speak === 'function') ? window.speak.bind(window) : null;
+  window.speak_original = _original || window.speak_original;
+
+  // wrapper returned to callers
+  function wrapper(){ return callUnified.apply(this, arguments); }
+
+  try{
+    // Intercept future assignments to window.speak
+    Object.defineProperty(window, 'speak', {
+      configurable: true,
+      enumerable: true,
+      get(){ return wrapper; },
+      set(v){
+        // whenever app redefines speak, keep newest as original but continue exposing wrapper
+        if (typeof v === 'function') {
+          _original = v.bind(window);
+          window.speak_original = _original;
+        } else {
+          _original = null;
+        }
+      }
+    });
+  }catch(e){
+    console.warn('defineProperty failed, fallback to interval hook', e);
+  }
+
+  // watchdog: ensure wrapper stays active even if scripts redefine property descriptor
+  setInterval(()=>{
+    try{
+      const desc = Object.getOwnPropertyDescriptor(window, 'speak');
+      if (!desc || (typeof window.speak !== 'function') || window.speak === _original){
+        // someone overwrote our getter; re-apply
+        Object.defineProperty(window, 'speak', {
+          configurable: true, enumerable: true,
+          get(){ return wrapper; },
+          set(v){
+            if (typeof v === 'function') {
+              _original = v.bind(window);
+              window.speak_original = _original;
+            } else {
+              _original = null;
+            }
+          }
+        });
+      }
+    }catch(e){ /* ignore */ }
+  }, 500);
+})();
+</script>
+
+
+<!-- 浮動 TTS 狀態角標 -->
+<div id="ttsFloat" style="position:fixed;left:16px;bottom:16px;z-index:9999;background:#111;color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;opacity:.85;">
+  <span id="ttsFloatText">TTS: 準備中…</span>
+</div>
+
+
+<script>
+(function(){
+  function setBadge(mode, voice, detail){
+    const badge = document.getElementById('ttsStatusBadge');
+    const float = document.getElementById('ttsFloatText');
+    const txt = voice ? `TTS: ${mode} · ${voice}` : `TTS: ${mode}`;
+    if (badge){ badge.textContent = txt; badge.style.background = mode==='Cloud' ? '#DCFCE7' : '#E5E7EB'; badge.style.color = mode==='Cloud' ? '#065F46' : '#111'; }
+    if (float){ float.textContent = detail ? `${txt} (${detail})` : txt; }
+  }
+  window.__setTTSBadge = setBadge;
+
+  async function checkCloudReady(){
+    try{
+      const server = localStorage.getItem('cloud_tts_server') || 'http://localhost:8787/api/tts';
+      const resp = await fetch(server, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text: '測試', voice: localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural', rate: '1.0', pitch: '+0%' })
+      });
+      return resp.ok;
+    }catch(e){ return false; }
+  }
+  window.__checkCloudReady = checkCloudReady;
+
+  // 初始狀態
+  setBadge((localStorage.getItem('use_cloud_tts')==='1')?'Cloud':'Local', localStorage.getItem('cloud_voice') || '未設定');
+
+  // 監看設定變化（每 1s 刷新一次狀態燈）
+  setInterval(()=>{
+    const mode = (localStorage.getItem('use_cloud_tts')==='1')?'Cloud':'Local';
+    const voice = localStorage.getItem('cloud_voice') || '未設定';
+    setBadge(mode, voice);
+  }, 1000);
+})();
+</script>
+
+
+<script>
+(function(){
+  // Wrap speakViaCloud to set status to Cloud on success
+  const origCloud = window.speakViaCloud;
+  if (typeof origCloud === 'function'){
+    window.speakViaCloud = async function(text){
+      const ok = await origCloud(text);
+      if (ok){
+        const voice = localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural';
+        if (window.__setTTSBadge) window.__setTTSBadge('Cloud', voice);
+      }
+      return ok;
+    }
+  }
+  // Wrap speakLocal to set status to Local
+  const origLocal = window.speakLocal;
+  if (typeof origLocal === 'function'){
+    window.speakLocal = function(text){
+      if (window.__setTTSBadge) window.__setTTSBadge('Local', 'Browser');
+      return origLocal(text);
+    }
+  }
+  // Wrap speakUnified to show which path used
+  const origUnified = window.speakUnified;
+  if (typeof origUnified === 'function'){
+    window.speakUnified = async function(text){
+      try{
+        const wantCloud = (localStorage.getItem('use_cloud_tts') === '1');
+        if (wantCloud){
+          // 先測雲端是否可用
+          // 不做健康檢查以免延遲；直接嘗試
+          const ok = await window.speakViaCloud(text);
+          if (ok) return;
+        }
+        return window.speakLocal(text);
+      } catch(e){
+        return window.speakLocal(text);
+      }
+    }
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  const serverDefault = 'http://localhost:8787/api/tts';
+  const serverI = document.getElementById('cloudServerInput');
+  const pingBtn = document.getElementById('cloudPingBtn');
+  const cloudOnlyChk = document.getElementById('cloudOnlyChk');
+  const diagDiv = document.getElementById('cloudDiag');
+
+  function setDiag(msg, ok){
+    if (!diagDiv) return;
+    diagDiv.style.display = 'block';
+    diagDiv.style.borderColor = ok ? '#bbf7d0' : '#fecaca';
+    diagDiv.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    diagDiv.style.color = ok ? '#14532d' : '#7f1d1d';
+    diagDiv.textContent = msg;
+  }
+
+  // init server URL
+  const savedServer = localStorage.getItem('cloud_tts_server') || serverDefault;
+  if (serverI){ serverI.value = savedServer; }
+  if (cloudOnlyChk){ cloudOnlyChk.checked = (localStorage.getItem('cloud_only') === '1'); }
+
+  if (serverI){
+    serverI.addEventListener('change', ()=>{
+      const v = serverI.value.trim() || serverDefault;
+      localStorage.setItem('cloud_tts_server', v);
+      setDiag('已保存伺服器：' + v, true);
+    });
+  }
+  if (cloudOnlyChk){
+    cloudOnlyChk.addEventListener('change', ()=>{
+      localStorage.setItem('cloud_only', cloudOnlyChk.checked ? '1' : '0');
+      setDiag('「雲端僅用」已' + (cloudOnlyChk.checked ? '開啟' : '關閉'), true);
+    });
+  }
+
+  if (pingBtn){
+    pingBtn.addEventListener('click', async ()=>{
+      const url = (serverI && serverI.value.trim()) || serverDefault;
+      localStorage.setItem('cloud_tts_server', url);
+      try{
+        const resp = await fetch(url, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ text:'系統測試', voice: localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural', rate:'1.0', pitch:'+0%' })
+        });
+        if (!resp.ok){
+          const txt = await resp.text();
+          setDiag('Cloud 測試失敗：HTTP ' + resp.status + ' ' + txt.slice(0,200), false);
+          if (window.__setTTSBadge) window.__setTTSBadge('Local', 'Browser', 'Cloud 測試失敗');
+          return;
+        }
+        const blob = await resp.blob();
+        const urlBlob = URL.createObjectURL(blob);
+        const audio = new Audio(urlBlob);
+        await audio.play();
+        setDiag('Cloud 測試成功：已成功產生並播放雲端語音。', true);
+        if (window.__setTTSBadge) window.__setTTSBadge('Cloud', localStorage.getItem('cloud_voice') || 'HsiaoChen', '測試成功');
+      }catch(e){
+        setDiag('Cloud 測試錯誤：' + (e && e.message ? e.message : e), false);
+        if (window.__setTTSBadge) window.__setTTSBadge('Local', 'Browser', 'Cloud 測試錯誤');
+      }
+    });
+  }
+
+  // Patch speakViaCloudOne to use server from input/localStorage and detailed diagnostics
+  if (typeof window.speakViaCloudOne === 'function'){
+    const original = window.speakViaCloudOne;
+    window.speakViaCloudOne = async function(text){
+      const server = (serverI && serverI.value.trim()) || localStorage.getItem('cloud_tts_server') || serverDefault;
+      try{
+        const payload = {
+          text: text,
+          voice: localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural',
+          rate:  localStorage.getItem('cloud_rate')  || '0.95',
+          pitch: localStorage.getItem('cloud_pitch') || '+6%'
+        };
+        const key = JSON.stringify(payload);
+        // 直呼原函式可能未使用最新 server，因此在這裡以 fetch 直接實作，避免舊邏輯
+        const resp = await fetch(server, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok){
+          const txt = await resp.text();
+          setDiag('雲端請求失敗：HTTP ' + resp.status + ' ' + txt.slice(0,200), false);
+          return false;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        await new Promise((resolve, reject)=>{
+          const audio = new Audio(url);
+          audio.onended = resolve;
+          audio.onerror = ()=> reject(new Error('audio 播放錯誤'));
+          audio.play().catch(reject);
+        });
+        if (window.__setTTSBadge) window.__setTTSBadge('Cloud', payload.voice);
+        return true;
+      }catch(e){
+        setDiag('雲端請求錯誤：' + (e && e.message ? e.message : e), false);
+        return false;
+      }
+    }
+  }
+
+  // Modify unified speak to respect "cloud_only" for debugging
+  if (typeof window.speakUnified === 'function'){
+    const origUnified = window.speakUnified;
+    window.speakUnified = async function(text){
+      try{
+        const wantCloud = (localStorage.getItem('use_cloud_tts') === '1');
+        const cloudOnly = (localStorage.getItem('cloud_only') === '1');
+        if (wantCloud){
+          const ok = await window.speakViaCloud(text);
+          if (ok) return;
+          if (cloudOnly){
+            if (window.__setTTSBadge) window.__setTTSBadge('Local', 'Browser', '雲端失敗（僅用模式，不播本機）');
+            return; // do not fallback
+          }
+        }
+        return window.speakLocal(text);
+      } catch(e){
+        if (window.__setTTSBadge) window.__setTTSBadge('Local', 'Browser', '例外：' + e.message);
+        return window.speakLocal(text);
+      }
+    }
+  }
+})();
+</script>
+
+
+<script>
+// ---- Robust TTS controller: single-flight, cancelable, with diagnostics ----
+(function(){
+  const serverDefault = 'http://localhost:8787/api/tts';
+  const getServer = ()=> localStorage.getItem('cloud_tts_server') || serverDefault;
+
+  // global controller
+  const TTS = window.TTS = window.TTS || {};
+  TTS._current = null;           // { type: 'cloud'|'local', audios: [HTMLAudioElement], canceled: bool }
+  TTS._playing = false;
+
+  function diag(msg, ok){
+    const diagDiv = document.getElementById('cloudDiag');
+    if (!diagDiv) return;
+    diagDiv.style.display = 'block';
+    diagDiv.style.borderColor = ok ? '#bbf7d0' : '#fecaca';
+    diagDiv.style.background = ok ? '#f0fdf4' : '#fef2f2';
+    diagDiv.style.color = ok ? '#14532d' : '#7f1d1d';
+    diagDiv.textContent = msg;
+  }
+  function setBadge(mode, voice, detail){
+    if (window.__setTTSBadge) window.__setTTSBadge(mode, voice, detail);
+  }
+
+  TTS.cancel = function(reason){
+    try{
+      const cur = TTS._current;
+      if (!cur) return;
+      cur.canceled = true;
+      // stop any audio
+      if (cur.audios) for (const a of cur.audios){ try{ a.pause(); a.src=''; }catch(e){} }
+      // stop local
+      try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+      TTS._current = null;
+      TTS._playing = false;
+      setBadge('Local', 'Browser', reason || '已中止');
+    }catch(e){}
+  };
+
+  async function playCloudChunks(chunks){
+    const voice = localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural';
+    const rate  = localStorage.getItem('cloud_rate')  || '0.95';
+    const pitch = localStorage.getItem('cloud_pitch') || '+6%';
+    const server = getServer();
+
+    const audios = [];
+    TTS._current = { type:'cloud', audios, canceled:false };
+    for (let i=0; i<chunks.length; i++){
+      if (TTS._current?.canceled) throw new Error('播放已取消');
+      const text = chunks[i];
+      try{
+        const resp = await fetch(server, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ text, voice, rate, pitch })
+        });
+        if (!resp.ok){
+          const txt = await resp.text();
+          diag(`雲端失敗（第 ${i+1}/${chunks.length} 段）：HTTP ${resp.status} ${txt.slice(0,200)}`, false);
+          throw new Error('Cloud HTTP '+resp.status);
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audios.push(audio);
+        await new Promise((resolve, reject)=>{
+          if (TTS._current?.canceled) return reject(new Error('播放已取消'));
+          audio.onended = resolve;
+          audio.onerror = ()=> reject(new Error('audio 播放錯誤'));
+          audio.play().catch(reject);
+        });
+        URL.revokeObjectURL(url);
+        await new Promise(r=>setTimeout(r, 250));
+      }catch(e){
+        throw e;
+      }
+    }
+  }
+
+  // Wrap existing helpers with controller
+  const normalizeForSpeech = window.normalizeForSpeech || function(t){ return (t||'').toString(); };
+  const splitSentences = window.splitSentences || function(t){ return [t]; };
+
+  // Replace speakViaCloud to single-flight + detailed errors
+  const origSpeakViaCloud = window.speakViaCloud;
+  window.speakViaCloud = async function(text){
+    try{
+      TTS.cancel('切換新播報');
+    }catch(e){}
+    const norm = normalizeForSpeech(text);
+    const chunks = splitSentences(norm).filter(Boolean).map(s=>s.trim()).filter(Boolean);
+    if (!chunks.length){ diag('沒有可播報的內容。', false); return false; }
+    // 片段長度過長切割保險
+    const safeChunks = [];
+    for (const c of chunks){
+      if (c.length <= 400) { safeChunks.push(c); continue; }
+      for (let i=0;i<c.length;i+=400) safeChunks.push(c.slice(i, i+400));
+    }
+    try{
+      TTS._playing = true;
+      setBadge('Cloud', localStorage.getItem('cloud_voice') || 'HsiaoChen', '準備播放');
+      await playCloudChunks(safeChunks);
+      setBadge('Cloud', localStorage.getItem('cloud_voice') || 'HsiaoChen', '完成');
+      return true;
+    }catch(e){
+      diag('雲端錯誤：' + (e && e.message ? e.message : e), false);
+      setBadge('Local', 'Browser', '雲端失敗');
+      return false;
+    }finally{
+      TTS._playing = false;
+    }
+  };
+
+  // Replace speakLocal to single-flight
+  const origSpeakLocal = window.speakLocal;
+  window.speakLocal = function(text){
+    try{ TTS.cancel('切換至本機'); }catch(e){}
+    const norm = normalizeForSpeech(text);
+    const parts = splitSentences(norm);
+    try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+    for (const p of parts){
+      const u = new SpeechSynthesisUtterance(p);
+      if (window.preferredVoice) u.voice = window.preferredVoice;
+      u.rate = 0.97; u.pitch = 1.06; u.volume = 1.0;
+      window.speechSynthesis.speak(u);
+    }
+    setBadge('Local', 'Browser', '播放中');
+  };
+
+  // Replace unified to check "cloud_only" and avoid silent failure
+  const origUnified = window.speakUnified;
+  window.speakUnified = async function(text){
+    const wantCloud = (localStorage.getItem('use_cloud_tts') === '1');
+    const cloudOnly = (localStorage.getItem('cloud_only') === '1');
+    if (wantCloud){
+      const ok = await window.speakViaCloud(text);
+      if (ok) return;
+      if (cloudOnly){
+        // 只用雲端：雲端失敗直接返回（不播放本機），以便使用者察覺
+        return;
+      }
+    }
+    return window.speakLocal(text);
+  };
+
+  // Provide global stop button hook if needed
+  window.stopTTS = ()=> TTS.cancel('手動停止');
+})();
+</script>
+
+
+<script>
+(function(){
+  function toPercent(s, kind){
+    if (!s) return (kind==='rate'?'95%':'+6%');
+    s = String(s).trim();
+    if (s.endsWith('%')) return s;
+    const n = Number(s);
+    if (!isNaN(n)){
+      if (kind==='rate'){
+        if (n <= 2) return Math.round(n*100) + '%';
+        return Math.round(n) + '%';
+      } else {
+        if (Math.abs(n) <= 2) return (n>=0?'+':'') + Math.round(n*100) + '%';
+        return (n>=0?'+':'') + Math.round(n) + '%';
+      }
+    }
+    return (kind==='rate'?'95%':'+6%');
+  }
+  const save = document.getElementById('cloudSaveBtn');
+  if (save){
+    save.addEventListener('click', ()=>{
+      const rI = document.getElementById('cloudRateInput');
+      const pI = document.getElementById('cloudPitchInput');
+      if (rI){ rI.value = toPercent(rI.value, 'rate'); localStorage.setItem('cloud_rate', rI.value); }
+      if (pI){ pI.value = toPercent(pI.value, 'pitch'); localStorage.setItem('cloud_pitch', pI.value); }
+    });
+  }
+})();
+</script>
+
+
+<script>
+(function(){
+  function toSignedPercent(s){
+    if (!s) return "0%";
+    s = String(s).trim();
+    if (/^[+-]?\d+(?:\.\d+)?%$/.test(s)) {
+      if (s.startsWith('+') || s.startsWith('-')) return s;
+      const n = parseFloat(s);
+      const delta = Math.round(n - 100);
+      return (delta>=0?'+':'') + delta + '%';
+    }
+    const n = Number(s);
+    if (!isNaN(n)){
+      if (Math.abs(n) <= 2){
+        const delta = Math.round((n - 1) * 100);
+        return (delta>=0?'+':'') + delta + '%';
+      } else {
+        const delta = Math.round(n - 100);
+        return (delta>=0?'+':'') + delta + '%';
+      }
+    }
+    return "0%";
+  }
+
+  const rateI  = document.getElementById('cloudRateInput');
+  const pitchI = document.getElementById('cloudPitchInput');
+  const save   = document.getElementById('cloudSaveBtn');
+  const minus  = document.getElementById('rateMinusBtn');
+  const plus   = document.getElementById('ratePlusBtn');
+
+  function clampPercent(s){
+    const m = s.match(/^([+-]?)(\d+)%$/);
+    if (!m) return s;
+    let sign = m[1] || '';
+    let val = parseInt(m[2], 10);
+    if (val > 90 && sign === '-') val = 90; // floor -90%
+    if (val > 200 && sign !== '-') val = 200; // cap +200%
+    return (sign || '+') + val + '%';
+  }
+
+  function bump(delta){
+    let cur = toSignedPercent(rateI.value || '0%');
+    const m = cur.match(/^([+-]?)(\d+)%$/);
+    let val = 0;
+    if (m){
+      const sign = m[1]==='-'?-1:1;
+      val = sign * parseInt(m[2],10);
+    }
+    val = Math.max(-90, Math.min(200, val + delta));
+    const res = (val>=0?'+':'') + val + '%';
+    rateI.value = res;
+    localStorage.setItem('cloud_rate', res);
+  }
+
+  if (minus) minus.addEventListener('click', ()=> bump(-5));
+  if (plus)  plus.addEventListener('click',  ()=> bump(+5));
+
+  if (save){
+    save.addEventListener('click', ()=>{
+      const r = clampPercent(toSignedPercent(rateI.value));
+      rateI.value = r;
+      localStorage.setItem('cloud_rate', r);
+      const p = pitchI.value || '+6%';
+      localStorage.setItem('cloud_pitch', p);
+      alert('雲端語音設定已保存');
+    });
+  }
+})();
+</script>
+
+
+<script>
+// ---- Robust audio playback to avoid false negatives ----
+(function(){
+  // Utility: play a Blob as audio robustly
+  async function playBlob(blob){
+    const url = URL.createObjectURL(blob);
+    return await new Promise((resolve, reject)=>{
+      const audio = new Audio();
+      audio.preload = 'auto';
+      let ended = false;
+      let started = false;
+      const cleanup = ()=>{
+        try{
+          audio.onended = null;
+          audio.onerror = null;
+          audio.onplaying = null;
+          audio.oncanplaythrough = null;
+          audio.src = '';
+        }catch(e){}
+        try{ URL.revokeObjectURL(url); }catch(e){}
+      };
+      audio.onplaying = ()=>{ started = true; };
+      audio.onended = ()=>{ ended = true; cleanup(); resolve(true); };
+      audio.onerror = ()=>{
+        // Safari/Chromium 有時會在已開始播放後仍觸發 error；若已開始或有進度，就視為成功
+        if (ended || started || (audio.currentTime && audio.currentTime > 0)){
+          cleanup(); resolve(true); return;
+        }
+        cleanup(); reject(new Error('audio 播放錯誤'));
+      };
+      audio.src = url;
+      const p = audio.play();
+      if (p && typeof p.catch === 'function'){
+        p.catch((err)=>{
+          // 某些瀏覽器會先拒絕 promise，但實際仍可播放；延遲檢查一次
+          setTimeout(()=>{
+            if (ended || started || (audio.currentTime && audio.currentTime > 0)){
+              cleanup(); resolve(true);
+            } else {
+              cleanup(); reject(err || new Error('audio 播放錯誤'));
+            }
+          }, 350);
+        });
+      }
+    });
+  }
+  window.__playBlobRobust = playBlob;
+
+  // If our cloud player exists, patch it to use robust playback
+  if (typeof window.speakViaCloud === 'function'){
+    // Try to detect our single-flight implementation pieces
+    // Replace internal playCloudChunks if exists
+    if (typeof window.TTS === 'object'){
+      // monkey patch helper inside speakViaCloud by wrapping fetch->blob->play
+      const origSpeakViaCloud = window.speakViaCloud;
+      window.speakViaCloud = async function(text){
+        // Run original; if it reports failure due to "audio 播放錯誤", retry with robust path
+        try{
+          const ok = await origSpeakViaCloud(text);
+          if (ok) return true;
+        }catch(e){ /* fallthrough to robust */ }
+        // Fallback robust path: stream chunks again using robust player
+        try{
+          const normalizeForSpeech = window.normalizeForSpeech || (t=>t||'');
+          const splitSentences = window.splitSentences || (t=>[t]);
+          const norm = normalizeForSpeech(text);
+          const chunks = splitSentences(norm).filter(Boolean).map(s=>s.trim()).filter(Boolean);
+          if (!chunks.length) return false;
+          const voice = localStorage.getItem('cloud_voice') || 'zh-TW-HsiaoChenNeural';
+          const rate  = localStorage.getItem('cloud_rate')  || '0%';
+          const pitch = localStorage.getItem('cloud_pitch') || '+6%';
+          const server = localStorage.getItem('cloud_tts_server') || 'http://localhost:8787/api/tts';
+          for (let i=0;i<chunks.length;i++){
+            const resp = await fetch(server, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ text: chunks[i], voice, rate, pitch })
+            });
+            if (!resp.ok){
+              const txt = await resp.text();
+              if (window.__setTTSBadge) window.__setTTSBadge('Local','Browser','HTTP '+resp.status);
+              return false;
+            }
+            const blob = await resp.blob();
+            await playBlob(blob);
+            await new Promise(r=>setTimeout(r, 200));
+          }
+          if (window.__setTTSBadge) window.__setTTSBadge('Cloud', voice, '完成');
+          return true;
+        }catch(e){
+          if (window.__setTTSBadge) window.__setTTSBadge('Local','Browser','robust 播放失敗');
+          return false;
+        }
+      }
+    }
+  }
+})();
+</script>
+
+</body>
+</html>
