@@ -29,45 +29,7 @@
     .score-input { width: 60px; text-align: center; }
     .btn-space { margin-right: 10px; margin-bottom: 5px; }
     #courtTabsContainer { margin-bottom: 1rem; }
-  
-/* === iPad 專用顯示修正（不改動功能，只調整樣式） === */
-@media (max-width: 1024px) {
-  /* 讓表格可水平捲動 */
-  .table-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  /* 增加球員欄位與 S/D 欄位的最小寬度，防止被擠壓看不到字 */
-  table.table td:nth-child(3),
-  table.table td:nth-child(4),
-  table.table td:nth-child(5),
-  table.table td:nth-child(6) {
-    min-width: 140px; /* A1/A2/B1/B2 */
-  }
-  table.table td:nth-child(7) {
-    min-width: 90px;  /* S/D */
-  }
-  /* 放大選單字體與改善 padding，避免 iPad 上被遮蓋或裁切 */
-  table.table select.form-select {
-    font-size: 1rem;
-    line-height: 1.2;
-    padding-left: 0.5rem;
-    padding-right: 1.75rem; /* 為原生下拉箭頭預留空間 */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  /* 分數欄位寬度略增，輸入更好點擊 */
-  .score-input {
-    min-width: 72px;
-  }
-  /* 讓每列的控制按鈕區不擠壓文字 */
-  td.text-center .btn {
-    white-space: nowrap;
-  }
-}
-
-</style>
+  </style>
 </head>
 <body>
 
@@ -142,8 +104,7 @@
       <button class="btn btn-dark btn-space">比賽分數<br>(Matches)</button>
     </div>
 
-    <div class="table-responsive">
-<table class="table table-bordered w-100">
+    <table class="table table-bordered">
       <thead class="table-light">
         <tr class="${m.locked?'locked-row':''}">
           <th></th>
@@ -156,7 +117,6 @@
       </thead>
       <tbody id="matchTableBody"></tbody>
     </table>
-</div>
 
     <div class="row mb-3">
       <div class="col-md-4">
